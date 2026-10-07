@@ -1,0 +1,7 @@
+{
+ "version": 1,
+ "updated": null,
+ "note": "Provenance of third-party skills: name -> {repo, path, confidence, last_status, last_commit, last_checked}. The live copy is ~/.config/skill-update/registry.json (user data, survives skill updates).",
+ "skills": {},
+ "excluded": {}
+}

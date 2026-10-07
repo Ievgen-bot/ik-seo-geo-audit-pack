@@ -1,0 +1,62 @@
+{
+ "_purpose": "Score one AI-assistant answer (ChatGPT / Gemini / Perplexity / Google AI) captured during an AI-visibility measurement. One request per answer row. Truth fields: mentioned, prominence, answer_type, tone.",
+ "_instance": "Generic template: copy into the project folder and replace context.business with the measured business before use.",
+ "model": "jev-latest",
+ "state_fields": [
+  "query_code",
+  "system",
+  "answer_text"
+ ],
+ "context": {
+  "business": {
+   "canonical_name": "<business or person name>",
+   "aliases": [
+    "<other spellings, transliterations>"
+   ],
+   "website": "<domain>",
+   "location": "<city / region / market>",
+   "what": "<what the business does>",
+   "not_the_business": [
+    "<competitors or namesakes that must NOT count as a mention>"
+   ]
+  }
+ },
+ "questions": {
+  "mentioned": {
+   "type": "noul",
+   "instructions": "Does `answer_text` name or recommend the specific business described in `context.business` (by its canonical name, any alias, its website, or an unmistakable reference to its own map listing)? Businesses listed in `context.business.not_the_business` and generic category phrases without this business's name do NOT count.",
+   "criteria": {
+    "true": "The business itself is named, linked, or unmistakably identified.",
+    "false": "The business is absent; only competitors, generic advice, or other businesses from `context.business.not_the_business` appear."
+   }
+  },
+  "prominence": {
+   "type": "choice",
+   "instructions": "How prominently does `answer_text` present the business from `context.business`?",
+   "criteria": {
+    "first": "The business is the first or the single main recommendation, or the answer is centered on it.",
+    "list": "The business appears as one item among several listed options, not the first/main one.",
+    "passing": "The business is mentioned only in passing (a brief aside, a citation, a footnote) without being recommended or described.",
+    "none": "The business is not mentioned at all."
+   }
+  },
+  "answer_type": {
+   "type": "choice",
+   "instructions": "Is `answer_text` mainly a transactional answer (recommends specific service providers, places, prices, contacts where to go) or an informational one (explains how something works, symptoms, procedures, general advice without recommending providers)?",
+   "criteria": {
+    "transactional": "Recommends or lists concrete service providers, or where to buy.",
+    "informational": "Explains, educates, or advises in general without naming providers as recommendations."
+   }
+  },
+  "tone": {
+   "type": "choice",
+   "instructions": "What is the tone of `answer_text` toward the business from `context.business`? Answer 'not_mentioned' if the business does not appear.",
+   "criteria": {
+    "positive": "Recommends it, praises quality, rating, expertise, or trust.",
+    "neutral": "Mentions it factually without evaluation.",
+    "negative": "Warns about it, cites bad reviews, low rating, complaints, or advises against it.",
+    "not_mentioned": "The business does not appear in the answer."
+   }
+  }
+ }
+}

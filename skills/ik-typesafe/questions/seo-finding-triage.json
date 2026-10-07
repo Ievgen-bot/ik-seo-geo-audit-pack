@@ -1,0 +1,76 @@
+{
+ "_purpose": "Triage ONE finding from a multi-agent SEO/GEO audit: is it backed by evidence, is it an unmeasured claim, which area, which severity. One request per finding row. Truth fields for calibration: t_has_evidence, t_unmeasured_claim, t_category, t_severity.",
+ "_instance": "Generic template. The audit chat copies this file into the project folder and fills context.site and context.owner_decisions_not_issues from owner-decisions.md before calibrating.",
+ "model": "jev-latest",
+ "state_fields": [
+  "url",
+  "issue",
+  "evidence"
+ ],
+ "context": {
+  "site": "<filled per project: domains and what the business is>",
+  "task": "Triage of one finding from an independent SEO/GEO audit of the site(s) in `context.site`. Judge only the finding text in `issue` and `evidence`.",
+  "owner_decisions_not_issues": [
+   "<filled per project from owner-decisions.md, e.g. 'pages hidden by noindex + absent from sitemap are deliberately closed'>"
+  ],
+  "conditional_cases_not_issues": [
+   "a self-referencing canonical",
+   "one-way internal links",
+   "the 3-click depth rule is not absolute",
+   "duplicates that are a SERP-domination positive",
+   "a lab number presented only as an estimate"
+  ],
+  "severity_levels": {
+   "critical": "directly hurting rankings or preventing indexation: a page that should be indexed cannot be found or indexed (noindex or robots block or canonical to a dead URL on a page that must rank, 5xx on the page itself).",
+   "high": "significant impact on SEO/GEO performance but does not block indexation: e.g. the owner's core entity is not glued (no canonical paragraph, related entities not linked), a page marked active in the page matrix returns 404, a whole language version is broken.",
+   "medium": "best-practice violation with moderate impact: title/description/OG defects, hreflang cluster errors or missing cluster on a few pages, orphan SERVICE pages in the sitemap, broken internal links, structured-data validity/consistency problems (breadcrumb pointing to a redirect/noindex URL), a server error on a non-standard request.",
+   "low": "minor optimization opportunity: missing image width/height, no cache validators on HTML, a 2-hop redirect chain, missing or oversized llms.txt, missing max-snippet directive, non-service content page with few inbound links, noise.",
+   "not_an_issue": "an owner decision or conditional case listed above, OR a claim that has no URL/evidence, OR a conclusion drawn from one unrepeated answer or an unmeasured score."
+  }
+ },
+ "questions": {
+  "has_evidence": {
+   "type": "noul",
+   "instructions": "Does the finding name at least one concrete URL or URL group AND give concrete verbatim evidence in `evidence` (an HTML/header/API quote, a count, a measured value, a command result)? Generic opinions ('the site is slow', 'titles should improve') without a URL and a measured/quoted fact do not count.",
+   "criteria": {
+    "true": "A concrete URL (or clear URL group with examples) and at least one quoted or measured fact are present.",
+    "false": "No concrete URL, or only opinion/generic advice without a quoted or measured fact."
+   }
+  },
+  "unmeasured_claim": {
+   "type": "noul",
+   "instructions": "Does the finding present an estimate, a score or a conclusion about AI-assistant visibility or citation as a measured fact when it is based on no measurement or on a single unrepeated answer (for example a made-up 'AI visibility score', or 'ChatGPT does not recommend the brand' from one query)?",
+   "criteria": {
+    "true": "A visibility score or an AI-recommendation conclusion is stated without a repeated measurement series or without the real answer texts.",
+    "false": "The finding is about the site's own code, markup, content, headers, redirects or links, or it reports real measured data."
+   }
+  },
+  "category": {
+   "type": "choice",
+   "instructions": "Which single area does the finding belong to?",
+   "criteria": {
+    "indexation_crawl": "robots, noindex, canonical, sitemap membership, crawl/indexing status in Google or Bing.",
+    "redirects_urls": "redirects, redirect chains, trailing slash, host (www/apex), URL structure, 404s of URLs.",
+    "on_page_meta": "title, meta description, robots meta directives, Open Graph, headings, on-page text.",
+    "structured_data": "JSON-LD / schema.org (including breadcrumb data and dates inside JSON-LD).",
+    "internal_linking_architecture": "internal links, orphan pages, navigation, site hierarchy.",
+    "content_quality": "article/page content, cannibalization, keyword coverage, content gaps.",
+    "performance_server": "page weight, images sizes/dimensions, caching headers, compression, server errors, response time.",
+    "international_hreflang": "hreflang, language versions, localization of header/footer.",
+    "geo_ai_visibility": "entity signals, llms.txt, AI-citability, AI crawler access, canonical self-description, knowledge-graph signals.",
+    "other": "none of the above."
+   }
+  },
+  "severity": {
+   "type": "choice",
+   "instructions": "Assign the severity of the finding using `context.severity_levels`. Choose not_an_issue when the finding is an owner decision or conditional case from the context, or has no evidence, or is an unmeasured claim.",
+   "criteria": {
+    "critical": "A page that should be indexed is blocked from or prevented in indexing, or directly hurts rankings (see context).",
+    "high": "Significant impact on SEO/GEO performance but not blocking indexation (see context).",
+    "medium": "Best-practice violation with moderate impact (see context).",
+    "low": "Minor optimization opportunity (see context).",
+    "not_an_issue": "Owner decision, conditional case, unsupported claim, or noise (see context)."
+   }
+  }
+ }
+}

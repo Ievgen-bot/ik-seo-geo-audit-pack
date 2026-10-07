@@ -1,0 +1,13 @@
+{
+  "name": "ik-seo-geo-audit",
+  "version": "0.1.0",
+  "description": "SEO + GEO audit pack for Claude Code: diagnostics of skills and access, an interview, and a master prompt that runs a full multi-agent audit autonomously; plus Search Console/Bing access, TypeSafe triage, AI-visibility measurement and safe skill updates.",
+  "author": {
+    "name": "Ievgen Kovalevskyi",
+    "url": "https://ikovalevskyi.com"
+  },
+  "homepage": "https://github.com/Ievgen-bot/ik-seo-geo-audit-pack",
+  "repository": "https://github.com/Ievgen-bot/ik-seo-geo-audit-pack",
+  "license": "Apache-2.0",
+  "keywords": ["seo", "geo", "audit", "search-console", "bing", "ai-visibility", "skills"]
+}

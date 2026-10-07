@@ -1,0 +1,410 @@
+#!/usr/bin/env python3
+"""jev — thin CLI for the TypeSafe System One API (model Jev).
+
+Stdlib only (no SDK) so it runs identically on a laptop and on a server.
+
+Key lookup order:
+  1. $TYPESAFE_API_KEY
+  2. ~/.config/typesafe/api_key            (single line)
+  3. ~/.config/typesafe/env                (export TYPESAFE_API_KEY=...)
+  4. $TYPESAFE_API_KEY_FILE                (any other file path, e.g. a server secret)
+
+Commands:
+  jev ping                                    smoke test with one Noul question
+  jev ask --questions Q.json --state "text"   one state, answers to stdout
+  jev ask --questions Q.json --rows R.jsonl   many states, one request per row
+  jev calibrate --results OUT.jsonl --truth R.jsonl --compare q=field ...
+  jev usage --results OUT.jsonl               token totals of a results file
+
+Questions file (JSON):
+  {"model": "jev-latest",
+   "context": {...static object merged into every state under "context"...},
+   "state_fields": ["answer_text", "query_code"],   # project row → state (optional)
+   "questions": {"<id>": {"type": "noul|choice|score", "instructions": ..., "criteria": ...}}}
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import random
+import sys
+import time
+import urllib.error
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+
+API_BASE = os.environ.get("TYPESAFE_BASE_URL", "https://api.typesafe.ai").rstrip("/")
+ENDPOINT = f"{API_BASE}/v1/systemone"
+KEY_FILES = [
+    Path.home() / ".config" / "typesafe" / "api_key",
+    Path.home() / ".config" / "typesafe" / "env",
+]
+if os.environ.get("TYPESAFE_API_KEY_FILE"):
+    KEY_FILES.append(Path(os.environ["TYPESAFE_API_KEY_FILE"]).expanduser())
+RETRY_STATUSES = {429, 500, 502, 503, 504, 529}
+
+
+def log(msg: str) -> None:
+    sys.stderr.write(msg.rstrip("\n") + "\n")
+    sys.stderr.flush()
+
+
+def die(msg: str, code: int = 2) -> None:
+    log(f"jev: {msg}")
+    sys.exit(code)
+
+
+def load_key() -> str:
+    key = os.environ.get("TYPESAFE_API_KEY", "").strip()
+    if key:
+        return key
+    for p in KEY_FILES:
+        try:
+            text = p.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for line in text.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "TYPESAFE_API_KEY=" in line:
+                line = line.split("TYPESAFE_API_KEY=", 1)[1].strip().strip('"').strip("'")
+            if line:
+                return line
+    die("API key not found: set TYPESAFE_API_KEY or create ~/.config/typesafe/api_key")
+    return ""  # unreachable
+
+
+def call_api(key: str, payload: dict, timeout: float, retries: int) -> dict:
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    delay = 1.0
+    last_err = "unknown"
+    for attempt in range(retries + 1):
+        req = urllib.request.Request(ENDPOINT, data=body, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")[:300]
+            last_err = f"HTTP {e.code}: {detail}"
+            if e.code not in RETRY_STATUSES or attempt == retries:
+                raise RuntimeError(last_err) from None
+        except (urllib.error.URLError, TimeoutError, OSError) as e:
+            last_err = f"network: {e}"
+            if attempt == retries:
+                raise RuntimeError(last_err) from None
+        time.sleep(delay + random.uniform(0, 0.5))
+        delay = min(delay * 2, 30)
+    raise RuntimeError(last_err)
+
+
+def load_questions(path: str) -> dict:
+    try:
+        spec = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        die(f"cannot read questions file {path}: {e}")
+    if not isinstance(spec.get("questions"), dict) or not spec["questions"]:
+        die("questions file must contain a non-empty 'questions' object")
+    for qid, q in spec["questions"].items():
+        if q.get("type") not in ("noul", "choice", "score"):
+            die(f"question '{qid}': type must be noul|choice|score")
+        if "instructions" not in q:
+            die(f"question '{qid}': 'instructions' is required")
+        if q["type"] in ("choice", "score") and "criteria" not in q:
+            die(f"question '{qid}': 'criteria' is required for {q['type']}")
+    return spec
+
+
+def read_rows(path: str) -> list[dict]:
+    p = Path(path)
+    text = p.read_text(encoding="utf-8")
+    if p.suffix == ".json":
+        data = json.loads(text)
+        if not isinstance(data, list):
+            die("--rows .json must be a JSON array of objects")
+        return data
+    rows = []
+    for n, line in enumerate(text.splitlines(), 1):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError as e:
+            die(f"--rows line {n}: invalid JSON ({e})")
+    return rows
+
+
+def row_id(row: dict, id_fields: list[str], index: int) -> str:
+    parts = [str(row.get(f, "")) for f in id_fields if f]
+    return "|".join(parts) if any(parts) else str(index)
+
+
+def build_state(row: dict, spec: dict) -> dict:
+    fields = spec.get("state_fields")
+    state = {k: row[k] for k in fields if k in row} if fields else dict(row)
+    if spec.get("context"):
+        state["context"] = spec["context"]
+    return state
+
+
+def cmd_ping(args: argparse.Namespace) -> int:
+    key = load_key()
+    payload = {
+        "state": "The invoice is 14 days overdue and the client stopped answering emails.",
+        "model": args.model,
+        "questions": {"overdue": {"type": "noul", "instructions": "Is the invoice overdue?"}},
+    }
+    t0 = time.time()
+    res = call_api(key, payload, args.timeout, args.retries)
+    dt = time.time() - t0
+    ans = res.get("answers", {}).get("overdue", {})
+    print(json.dumps({"ok": True, "model": res.get("model"), "noul": ans.get("noul"),
+                      "seconds": round(dt, 2), "usage": res.get("usage")}, ensure_ascii=False))
+    return 0
+
+
+def cmd_ask(args: argparse.Namespace) -> int:
+    spec = load_questions(args.questions)
+    model = args.model or spec.get("model", "jev-latest")
+    id_fields = [f.strip() for f in (args.id_field or "").split(",") if f.strip()]
+
+    if args.state is not None:
+        state: object = args.state
+        try:
+            state = json.loads(args.state)
+        except json.JSONDecodeError:
+            pass
+        if isinstance(state, dict) and spec.get("context"):
+            state["context"] = spec["context"]
+        jobs = [("0", state)]
+    elif args.rows:
+        rows = read_rows(args.rows)
+        jobs = [(row_id(r, id_fields, i), build_state(r, spec)) for i, r in enumerate(rows)]
+    else:
+        die("provide --state or --rows")
+        return 2
+
+    done_ids: set[str] = set()
+    if args.out and args.resume and Path(args.out).exists():
+        for line in Path(args.out).read_text(encoding="utf-8").splitlines():
+            try:
+                done_ids.add(str(json.loads(line).get("_id")))
+            except (json.JSONDecodeError, AttributeError):
+                continue
+        jobs = [j for j in jobs if j[0] not in done_ids]
+
+    if args.max_requests is not None and len(jobs) > args.max_requests:
+        log(f"ceiling: {len(jobs)} rows > --max-requests {args.max_requests}; "
+            f"sending only the first {args.max_requests}")
+        jobs = jobs[: args.max_requests]
+
+    if args.dry_run:
+        sample = {"state": jobs[0][1] if jobs else None, "model": model, "questions": spec["questions"]}
+        print(json.dumps({"dry_run": True, "requests": len(jobs), "already_done": len(done_ids),
+                          "sample_payload": sample}, ensure_ascii=False, indent=2))
+        return 0
+
+    if not jobs:
+        log("nothing to do (all rows already in --out)")
+        return 0
+
+    key = load_key()
+    out_fh = open(args.out, "a", encoding="utf-8") if args.out else None
+    totals = {"requests": 0, "failed": 0, "input_tokens": 0, "output_tokens": 0}
+    t0 = time.time()
+
+    def work(job: tuple[str, object]) -> dict:
+        jid, state = job
+        payload = {"state": state, "model": model, "questions": spec["questions"]}
+        try:
+            res = call_api(key, payload, args.timeout, args.retries)
+            return {"_id": jid, "model": res.get("model"), "answers": res.get("answers", {}),
+                    "usage": res.get("usage", {})}
+        except RuntimeError as e:
+            return {"_id": jid, "error": str(e)}
+
+    with ThreadPoolExecutor(max_workers=max(1, args.concurrency)) as pool:
+        futures = [pool.submit(work, j) for j in jobs]
+        for n, fut in enumerate(as_completed(futures), 1):
+            rec = fut.result()
+            totals["requests"] += 1
+            if "error" in rec:
+                totals["failed"] += 1
+            else:
+                u = rec.get("usage") or {}
+                totals["input_tokens"] += int(u.get("input_tokens", 0))
+                totals["output_tokens"] += int(u.get("output_tokens", 0))
+            line = json.dumps(rec, ensure_ascii=False)
+            if out_fh:
+                out_fh.write(line + "\n")
+                out_fh.flush()
+            else:
+                print(line)
+            if args.progress and n % args.progress == 0:
+                log(f"{n}/{len(jobs)} done, {totals['failed']} failed, "
+                    f"{totals['input_tokens']} in-tokens, {time.time() - t0:.0f}s")
+
+    if out_fh:
+        out_fh.close()
+    totals["seconds"] = round(time.time() - t0, 1)
+    log("summary " + json.dumps(totals))
+    return 1 if totals["failed"] else 0
+
+
+def truthy(v: object) -> bool | None:
+    if v is None:
+        return None
+    if isinstance(v, bool):
+        return v
+    s = str(v).strip().lower()
+    if s in ("true", "yes", "1", "так", "y"):
+        return True
+    if s in ("false", "no", "0", "ні", "n"):
+        return False
+    return None  # "none", "", unknown → label missing, skip the row
+
+
+def normalize(answer: dict, threshold: float) -> object:
+    t = answer.get("type")
+    if t == "noul":
+        return answer.get("noul", 0.0) >= threshold
+    if t == "choice":
+        return str(answer.get("choice", "")).strip().lower()
+    if t == "score":
+        return int(round(float(answer.get("score", 0))))
+    return None
+
+
+def cmd_calibrate(args: argparse.Namespace) -> int:
+    id_fields = [f.strip() for f in (args.id_field or "").split(",") if f.strip()]
+    truth_rows = read_rows(args.truth)
+    truth = {row_id(r, id_fields, i): r for i, r in enumerate(truth_rows)}
+    results = read_rows(args.results)
+    pairs = []
+    for c in args.compare:
+        if "=" not in c:
+            die(f"--compare expects question=truth_field, got '{c}'")
+        pairs.append(tuple(c.split("=", 1)))
+
+    report: dict[str, dict] = {}
+    for qid, field in pairs:
+        stats = {"n": 0, "match": 0, "skipped": 0, "mismatches": [], "confusion": {}}
+        for rec in results:
+            if "error" in rec:
+                continue
+            tr = truth.get(str(rec.get("_id")))
+            ans = rec.get("answers", {}).get(qid)
+            if tr is None or ans is None or field not in tr:
+                stats["skipped"] += 1
+                continue
+            expected = tr[field]
+            got = normalize(ans, args.threshold)
+            if ans.get("type") == "noul":
+                exp_n = truthy(expected)
+                if exp_n is None:
+                    stats["skipped"] += 1
+                    continue
+                ok = got == exp_n
+                exp_s, got_s = str(exp_n), str(got)
+            elif ans.get("type") == "choice":
+                # A JSON null or empty string means "no label"; the literal
+                # string "none" can be a legitimate option (e.g. prominence).
+                if expected is None or str(expected).strip() == "":
+                    stats["skipped"] += 1
+                    continue
+                exp_s = str(expected).strip().lower()
+                got_s = str(got)
+                ok = got_s == exp_s
+            else:
+                try:
+                    exp_i = int(round(float(expected)))
+                except (TypeError, ValueError):
+                    stats["skipped"] += 1
+                    continue
+                exp_s, got_s = str(exp_i), str(got)
+                ok = got == exp_i
+            stats["n"] += 1
+            key = f"{exp_s} -> {got_s}"
+            stats["confusion"][key] = stats["confusion"].get(key, 0) + 1
+            if ok:
+                stats["match"] += 1
+            elif len(stats["mismatches"]) < args.show:
+                extra = {}
+                if ans.get("type") == "noul":
+                    extra["noul"] = ans.get("noul")
+                else:
+                    extra["confidence"] = ans.get("confidence")
+                stats["mismatches"].append({"_id": rec.get("_id"), "expected": exp_s, "got": got_s, **extra})
+        stats["accuracy"] = round(stats["match"] / stats["n"], 4) if stats["n"] else None
+        report[qid] = stats
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    worst = min((s["accuracy"] for s in report.values() if s["accuracy"] is not None), default=None)
+    if worst is not None and worst < args.min_accuracy:
+        log(f"calibration FAILED: worst accuracy {worst} < --min-accuracy {args.min_accuracy}")
+        return 1
+    return 0
+
+
+def cmd_usage(args: argparse.Namespace) -> int:
+    tot = {"records": 0, "errors": 0, "input_tokens": 0, "output_tokens": 0}
+    for rec in read_rows(args.results):
+        tot["records"] += 1
+        if "error" in rec:
+            tot["errors"] += 1
+            continue
+        u = rec.get("usage") or {}
+        tot["input_tokens"] += int(u.get("input_tokens", 0))
+        tot["output_tokens"] += int(u.get("output_tokens", 0))
+    print(json.dumps(tot))
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(prog="jev", description="TypeSafe System One (Jev) CLI")
+    ap.add_argument("--model", default=None, help="model id/alias (default: questions file or jev-latest)")
+    ap.add_argument("--timeout", type=float, default=60.0)
+    ap.add_argument("--retries", type=int, default=4)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    sub.add_parser("ping", help="one-question smoke test")
+
+    a = sub.add_parser("ask", help="ask questions over one state or many rows")
+    a.add_argument("--questions", required=True, help="questions JSON file")
+    a.add_argument("--state", help="single state: plain text or JSON")
+    a.add_argument("--rows", help="JSONL (or .json array) of row objects; one request per row")
+    a.add_argument("--id-field", default="", help="comma-separated row fields forming the record id")
+    a.add_argument("--out", help="append results as JSONL here (default: stdout)")
+    a.add_argument("--resume", action="store_true", help="skip ids already present in --out")
+    a.add_argument("--max-requests", type=int, default=None, help="hard ceiling on API calls per run")
+    a.add_argument("--concurrency", type=int, default=6)
+    a.add_argument("--progress", type=int, default=25, help="log every N rows (0=off)")
+    a.add_argument("--dry-run", action="store_true", help="show request count + sample payload, send nothing")
+
+    c = sub.add_parser("calibrate", help="compare results against labeled truth rows")
+    c.add_argument("--results", required=True)
+    c.add_argument("--truth", required=True, help="labeled rows (same id fields as the run)")
+    c.add_argument("--id-field", default="")
+    c.add_argument("--compare", nargs="+", required=True, help="question_id=truth_field ...")
+    c.add_argument("--threshold", type=float, default=0.5, help="Noul yes-threshold")
+    c.add_argument("--min-accuracy", type=float, default=0.9)
+    c.add_argument("--show", type=int, default=15, help="mismatches to list per question")
+
+    u = sub.add_parser("usage", help="token totals of a results file")
+    u.add_argument("--results", required=True)
+
+    args = ap.parse_args(argv)
+    if args.model is None and args.cmd == "ping":
+        args.model = "jev-latest"
+    return {"ping": cmd_ping, "ask": cmd_ask, "calibrate": cmd_calibrate, "usage": cmd_usage}[args.cmd](args)
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except KeyboardInterrupt:
+        sys.exit(130)

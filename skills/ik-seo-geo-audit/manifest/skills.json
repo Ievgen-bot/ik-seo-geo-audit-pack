@@ -1,0 +1,38 @@
+{
+  "_doc": "Skills the audit needs. 'own' ship in this pack. 'third_party' are NEVER copied here: each user installs them from upstream (Claude Code plugin marketplaces). 'size' says whether the skill is needed for the light audit, the full audit, or the interview.",
+  "pack": {
+    "repo": "Ievgen-bot/ik-seo-geo-audit-pack",
+    "marketplace": "ik-seo-geo-audit-pack",
+    "plugin": "ik-seo-geo-audit"
+  },
+  "own": [
+    {"name": "ik-seo-geo-audit", "path": "skills/ik-seo-geo-audit", "size": ["light", "full"]},
+    {"name": "ik-seo-webmaster", "path": "skills/ik-seo-webmaster", "size": ["light", "full"]},
+    {"name": "ik-typesafe", "path": "skills/ik-typesafe", "size": ["optional"]},
+    {"name": "ik-ai-visibility-baseline", "path": "skills/ik-ai-visibility-baseline", "size": ["optional"]},
+    {"name": "ik-ai-visibility-recheck", "path": "skills/ik-ai-visibility-recheck", "size": ["optional"]},
+    {"name": "skill-update", "path": "skills/skill-update", "size": ["optional"]}
+  ],
+  "third_party": [
+    {"name": "technical-seo", "kind": "skill", "repo": "searchfit/searchfit-seo", "path": "skills/technical-seo/SKILL.md", "marketplace": "searchfit-seo", "plugin": "searchfit-seo", "license": "MIT", "size": ["light", "full"], "role": "auditor 01: indexing, robots, canonical, hreflang, redirects"},
+    {"name": "on-page-seo", "kind": "skill", "repo": "searchfit/searchfit-seo", "path": "skills/on-page-seo/SKILL.md", "marketplace": "searchfit-seo", "plugin": "searchfit-seo", "license": "MIT", "size": ["light", "full"], "role": "auditor 02: titles, descriptions, headings, content"},
+    {"name": "schema-markup", "kind": "skill", "repo": "searchfit/searchfit-seo", "path": "skills/schema-markup/SKILL.md", "marketplace": "searchfit-seo", "plugin": "searchfit-seo", "license": "MIT", "size": ["light", "full"], "role": "auditor 03: JSON-LD"},
+    {"name": "internal-linking", "kind": "skill", "repo": "searchfit/searchfit-seo", "path": "skills/internal-linking/SKILL.md", "marketplace": "searchfit-seo", "plugin": "searchfit-seo", "license": "MIT", "size": ["light", "full"], "role": "auditor 04: link graph, orphans"},
+    {"name": "broken-links", "kind": "skill", "repo": "searchfit/searchfit-seo", "path": "skills/broken-links/SKILL.md", "marketplace": "searchfit-seo", "plugin": "searchfit-seo", "license": "MIT", "size": ["full"], "role": "auditor 05"},
+    {"name": "ai-visibility", "kind": "skill", "repo": "searchfit/searchfit-seo", "path": "skills/ai-visibility/SKILL.md", "marketplace": "searchfit-seo", "plugin": "searchfit-seo", "license": "MIT", "size": ["full"], "role": "auditor 06"},
+    {"name": "keyword-clustering", "kind": "skill", "repo": "searchfit/searchfit-seo", "path": "skills/keyword-clustering/SKILL.md", "marketplace": "searchfit-seo", "plugin": "searchfit-seo", "license": "MIT", "size": ["full"], "role": "auditor 07"},
+    {"name": "seo-audit", "kind": "skill", "repo": "searchfit/searchfit-seo", "path": "skills/seo-audit/SKILL.md", "marketplace": "searchfit-seo", "plugin": "searchfit-seo", "license": "MIT", "size": ["full"], "role": "auditor 08 (end-to-end)"},
+    {"name": "seo-auditor", "kind": "agent", "repo": "searchfit/searchfit-seo", "path": "agents/seo-auditor/AGENT.md", "marketplace": "searchfit-seo", "plugin": "searchfit-seo", "license": "MIT", "size": ["full"], "role": "auditor 08 agent type"},
+    {"name": "competitor-analyzer", "kind": "agent", "repo": "searchfit/searchfit-seo", "path": "agents/competitor-analyzer/AGENT.md", "marketplace": "searchfit-seo", "plugin": "searchfit-seo", "license": "MIT", "size": ["full"], "role": "auditor 09"},
+    {"name": "seo-audit", "kind": "skill", "repo": "anthropics/knowledge-work-plugins", "path": "marketing/skills/seo-audit/SKILL.md", "marketplace": "knowledge-work-plugins", "plugin": "marketing", "license": "Apache-2.0", "size": ["full"], "role": "auditor 10 (marketing:seo-audit)", "id": "marketing:seo-audit"},
+    {"name": "seo-ai-visibility", "kind": "skill", "repo": "anthropics/knowledge-work-plugins", "path": "small-business/skills/seo-ai-visibility/SKILL.md", "marketplace": "knowledge-work-plugins", "plugin": "small-business", "license": "Apache-2.0", "size": ["full"], "role": "auditor 11"},
+    {"name": "ai-seo", "kind": "skill", "repo": "coreyhaines31/marketingskills", "path": "skills/ai-seo/SKILL.md", "marketplace": "marketingskills", "plugin": "marketing-skills", "license": "MIT", "size": ["light", "full"], "role": "auditor 12 (GEO)"},
+    {"name": "geo-optimizer", "kind": "skill", "repo": "nowork-studio/notfair-plugin", "path": "seo/geo-optimizer/SKILL.md", "marketplace": "nowork-studio", "plugin": "notfair", "license": "MIT", "size": ["light", "full"], "role": "auditor 12 (GEO)"},
+    {"name": "schema-markup-generator", "kind": "skill", "repo": "nowork-studio/notfair-plugin", "path": "seo/schema-markup-generator/SKILL.md", "marketplace": "nowork-studio", "plugin": "notfair", "license": "MIT", "size": ["full"], "role": "auditor 13"},
+    {"name": "meta-tags-optimizer", "kind": "skill", "repo": "nowork-studio/notfair-plugin", "path": "seo/meta-tags-optimizer/SKILL.md", "marketplace": "nowork-studio", "plugin": "notfair", "license": "MIT", "size": ["full"], "role": "auditor 13"},
+    {"name": "site-architecture", "kind": "skill", "repo": "coreyhaines31/marketingskills", "path": "skills/site-architecture/SKILL.md", "marketplace": "marketingskills", "plugin": "marketing-skills", "license": "MIT", "size": ["full"], "role": "auditor 14"},
+    {"name": "seo-analysis", "kind": "skill", "repo": "nowork-studio/notfair-plugin", "path": "seo/seo-analysis/SKILL.md", "marketplace": "nowork-studio", "plugin": "notfair", "license": "MIT", "size": ["full"], "role": "auditor 15"},
+    {"name": "grilling", "kind": "skill", "repo": "mattpocock/skills", "path": "skills/productivity/grilling/SKILL.md", "marketplace": "mattpocock", "plugin": "mattpocock-skills", "license": "MIT", "size": ["interview"], "role": "the interview before every audit"},
+    {"name": "humanizer", "kind": "skill", "repo": "blader/humanizer", "path": "SKILL.md", "marketplace": "humanizer", "plugin": "humanizer", "license": "MIT", "size": ["optional"], "role": "optional: polish client-facing texts"}
+  ]
+}

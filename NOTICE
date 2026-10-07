@@ -1,0 +1,12 @@
+ik-seo-geo-audit-pack
+Copyright 2026 Ievgen Kovalevskyi
+
+This product includes short quotations, with attribution, from the following
+third-party agent skills, used under their licenses (the skills themselves are
+NOT redistributed here; users install them from their upstream repositories):
+- searchfit/searchfit-seo (MIT)
+- anthropics/knowledge-work-plugins: marketing, small-business (Apache-2.0)
+- coreyhaines31/marketingskills (MIT)
+- nowork-studio/notfair-plugin (MIT)
+- mattpocock/skills (MIT) — used for the interview, not quoted
+- blader/humanizer (MIT) — optional, not quoted

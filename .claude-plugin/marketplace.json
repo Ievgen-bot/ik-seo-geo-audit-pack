@@ -1,0 +1,15 @@
+{
+  "name": "ik-seo-geo-audit-pack",
+  "description": "SEO + GEO audit pack for Claude Code.",
+  "owner": {
+    "name": "Ievgen Kovalevskyi",
+    "url": "https://ikovalevskyi.com"
+  },
+  "plugins": [
+    {
+      "name": "ik-seo-geo-audit",
+      "description": "Diagnose, interview, and hand over a master prompt for a full multi-agent SEO + GEO audit.",
+      "source": "./"
+    }
+  ]
+}
